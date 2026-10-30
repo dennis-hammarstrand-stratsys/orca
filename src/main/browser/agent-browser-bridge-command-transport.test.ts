@@ -54,6 +54,7 @@ vi.mock('./cdp-bridge', () => ({
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
+  agentBrowserCommandsIn,
   answerAgentBrowserCommands,
   createSucceedWith,
   mockBrowserManager,
@@ -208,6 +209,32 @@ describe('AgentBrowserBridge', () => {
       '[{"command":["click","@e2"],"error":null,"result":{"clicked":"@e2","lifecycle":{"effectiveLaunch":{"browserLaunched":true,"engine":"chrome","launchHash":520248349195465926},"launched":false,"relaunchedBrowser":false,"restartedBackground":false,"restoreStatus":"not_configured","reused":true,"saveStatus":"not_attempted"}},"success":true}]'
     answerAgentBrowserCommands(execFileMock, stdinWrites, (_command, cb) => cb(null, reply, ''))
     await expect(bridge.click('@e2')).resolves.toEqual({ clicked: '@e2' })
+  })
+
+  it("adds effects to an agent's click and costs a person's click nothing extra", async () => {
+    webContentsFromIdMock.mockReturnValue(mockWebContents(100))
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      const data =
+        command[0] === 'snapshot'
+          ? { snapshot: { kind: 'unchanged', baseRevision: 1, revision: 2 } }
+          : { clicked: '@e2' }
+      cb(null, JSON.stringify({ success: true, data }), '')
+    })
+
+    await expect(bridge.click('@e2')).resolves.toEqual({ clicked: '@e2' })
+    expect(agentBrowserCommandsIn(stdinWrites)).toEqual([['click', '@e2']])
+
+    const agentBridge = new AgentBrowserBridge(
+      mockBrowserManager(undefined, undefined, {
+        beginAgentCommand: () => ({ agent: true, run: (execute) => execute(), end: () => {} }),
+        observePageEvents: () => () => {}
+      })
+    )
+    agentBridge.setActiveTab(100)
+    await expect(agentBridge.click('@e2')).resolves.toMatchObject({
+      clicked: '@e2',
+      effects: { page: 'unchanged' }
+    })
   })
 
   // agent-browser 0.39.2+ wording when it cannot re-resolve a ref by role and name.

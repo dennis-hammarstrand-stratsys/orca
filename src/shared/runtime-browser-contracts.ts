@@ -17,6 +17,27 @@ export type BrowserSnapshotResult = {
   title: string
 }
 
+/** What an agent's page action caused; absent for people's input and from runtimes that predate it. */
+export type BrowserActionEffects = {
+  /** Set only when the action changed them. */
+  url?: string
+  title?: string
+  /** A navigation was still loading at the settle cap, so no page changes are listed. */
+  loading?: boolean
+  loadError?: string
+  /** No browserPageId: the tab was requested but had not opened by the settle cap. */
+  newTabs?: { browserPageId?: string; url: string }[]
+  popups?: { action: 'blocked' | 'opened-external' | 'window'; origin: string }[]
+  /** A confirm or prompt now blocking the page. */
+  dialog?: string
+  downloads?: { filename: string; origin: string }[]
+  consoleErrors?: string[]
+  /** Snapshot lines changed since the last reading; `full` is the whole new tree. Absent when unread. */
+  page?: 'unchanged' | { lines: string[]; removedLines: number; full: boolean; truncated: boolean }
+  /** False when the page was still changing at the settle cap. */
+  settled: boolean
+}
+
 export type BrowserClickResult = { clicked: string }
 export type BrowserGotoResult = { url: string; title: string }
 export type BrowserFillResult = { filled: string }

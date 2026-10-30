@@ -17,21 +17,23 @@ export class RuntimeBrowserDialogs {
     params: { text?: string } & BrowserCommandTargetParams
   ): Promise<BrowserDialogResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
-    if (!(await this.screencasts.settleDialog(target.browserPageId, true, params.text))) {
-      await this.targets
-        .requireAgentBrowserBridge()
-        .dialogAccept(params.text, target.worktreeId, target.browserPageId)
+    if (await this.screencasts.settleDialog(target.browserPageId, true, params.text)) {
+      return browserDialogSettledResult(true)
     }
-    return browserDialogSettledResult(true)
+    const result = await this.targets
+      .requireAgentBrowserBridge()
+      .dialogAccept(params.text, target.worktreeId, target.browserPageId)
+    return browserDialogSettledResult(true, result)
   }
 
   async browserDialogDismiss(params: BrowserCommandTargetParams): Promise<BrowserDialogResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
-    if (!(await this.screencasts.settleDialog(target.browserPageId, false))) {
-      await this.targets
-        .requireAgentBrowserBridge()
-        .dialogDismiss(target.worktreeId, target.browserPageId)
+    if (await this.screencasts.settleDialog(target.browserPageId, false)) {
+      return browserDialogSettledResult(false)
     }
-    return browserDialogSettledResult(false)
+    const result = await this.targets
+      .requireAgentBrowserBridge()
+      .dialogDismiss(target.worktreeId, target.browserPageId)
+    return browserDialogSettledResult(false, result)
   }
 }

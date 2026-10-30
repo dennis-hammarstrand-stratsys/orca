@@ -48,15 +48,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return wc
   }
 
-  /** Idle retirement loses daemon routes; restore them when its replacement connects. */
+  /** Idle retirement loses daemon routes and the delta baseline; restore routes when its replacement connects. */
   protected reinitializeIfDaemonIdledOut(sessionName: string, session: SessionState): void {
-    if (
-      this.agentBrowserIdleTimeoutMs === null ||
-      Date.now() - session.lastCommandAt < this.agentBrowserIdleTimeoutMs
-    ) {
+    if (!this.isDaemonIdledOut(session)) {
       return
     }
     session.initialized = false
+    session.hasDeltaBaseline = false
     if (session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }

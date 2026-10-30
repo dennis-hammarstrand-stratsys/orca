@@ -32,7 +32,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
   }
 
   async dialogAccept(text?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
       const args = ['dialog', 'accept']
       if (text) {
         args.push(text)
@@ -42,7 +42,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
   }
 
   async dialogDismiss(worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['dialog', 'dismiss'])
     })
   }
@@ -113,7 +113,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
       throw new BrowserError('invalid_argument', `--path must be an absolute path: ${savePath}`)
     }
     const replyDeadline = Date.now() + AGENT_DOWNLOAD_REPLY_DEADLINE_MS
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) => {
@@ -165,20 +165,20 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
   }
 
   async back(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['back'])) as BrowserBackResult
     })
   }
 
   async forward(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
     })
   }
 
   async reload(worktreeId?: string, browserPageId?: string): Promise<BrowserReloadResult> {
     // Reload directly because a process swap can destroy the helper session mid-command.
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
+    return this.enqueuePageAction(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')

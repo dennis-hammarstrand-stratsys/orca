@@ -7,6 +7,7 @@ import {
   type AgentCommandLease,
   type AgentPointerInput
 } from './browser-agent-activity'
+import { BrowserPageEvents, type BrowserPageEvent } from './browser-page-events'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
@@ -16,6 +17,16 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     rendererForPage: (browserPageId) => this.resolveRendererForBrowserTab(browserPageId),
     worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null
   })
+
+  protected readonly pageEvents = new BrowserPageEvents()
+
+  /** Tabs requested, popup outcomes and downloads attributed to the page, as they happen. */
+  observePageEvents(
+    browserPageId: string,
+    listener: (event: BrowserPageEvent) => void
+  ): () => void {
+    return this.pageEvents.observe(browserPageId, listener)
+  }
 
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {

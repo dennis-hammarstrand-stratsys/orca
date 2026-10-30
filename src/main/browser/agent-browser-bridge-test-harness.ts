@@ -38,6 +38,7 @@ export function mockBrowserManager(
     holdPaintForCapture: () => () => {},
     holdGuestActive: () => () => {},
     beginAgentCommand: () => ({
+      agent: false,
       run: (execute: () => Promise<unknown>) => execute(),
       end: () => {}
     }),

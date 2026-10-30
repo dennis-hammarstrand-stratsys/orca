@@ -18,6 +18,7 @@ export {
   type ComputerWindowListWindow
 } from './computer-use-runtime-types'
 export type {
+  BrowserActionEffects,
   BrowserBackResult,
   BrowserCaptureStartResult,
   BrowserCaptureStopResult,

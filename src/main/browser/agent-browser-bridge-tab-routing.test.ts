@@ -270,7 +270,7 @@ describe('AgentBrowserBridge', () => {
           isAgentUsingPage: (id: string) => agentPages.has(id),
           beginAgentCommand: (id: string) => {
             agentPages.add(id)
-            return { run: (execute) => execute(), end: () => {} }
+            return { agent: false, run: (execute) => execute(), end: () => {} }
           }
         })
       )

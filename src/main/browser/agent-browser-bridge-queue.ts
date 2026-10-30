@@ -6,7 +6,11 @@ import type {
   EnqueueTargetedCommandOptions,
   ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
-import { runWithRemoteCliPageAdmission } from './remote-cli-page-admission'
+import {
+  assertRemoteCliPageAccess,
+  runWithRemoteCliPageAdmission
+} from './remote-cli-page-admission'
+import { runWithActionEffects, type ActionEffectsHost } from './agent-browser-action-effects'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
 import { releaseHeldPageInput } from './guest-direct-key-input'
 import {
@@ -14,6 +18,8 @@ import {
   captureRemoteCliBrowserScope,
   runOutsideRemoteCliBrowserScope
 } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+
+const EFFECTS_SNAPSHOT_TIMEOUT_MS = 5_000
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
   // Serialize tab switches behind commands targeting the current tab.
@@ -55,6 +61,19 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     return this.enqueueTargetedCommand(worktreeId, undefined, execute)
   }
 
+  /** A command that acts on the page; an agent's gets the effects it caused added to its result. */
+  protected enqueuePageAction<T>(
+    worktreeId: string | undefined,
+    browserPageId: string | undefined,
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: EnqueueTargetedCommandOptions = {}
+  ): Promise<T> {
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, execute, {
+      ...options,
+      reportEffects: options.reportEffects !== false
+    })
+  }
+
   protected async enqueueTargetedCommand<T>(
     worktreeId: string | undefined,
     browserPageId: string | undefined,
@@ -75,6 +94,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     }
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
     const agentCommand = this.browserManager.beginAgentCommand(pageId)
+    // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
+    const reportEffects = options.reportEffects === true && agentCommand.agent
 
     // Dropped commands never execute, so settling also ends the lease; ending twice is harmless.
     return new Promise<T>((resolve, reject) => {
@@ -93,11 +114,16 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
               (session, target) => {
                 const gate = (): void => assertNotRevoked(target.webContentsId)
                 gate()
+                const act = (): Promise<T> =>
+                  reportEffects
+                    ? runWithActionEffects(
+                        this.actionEffectsHost(worktreeId, pageId, session),
+                        () => execute(session, target)
+                      )
+                    : execute(session, target)
                 return origin.bridged
-                  ? this.runHostCommand(session, target.webContentsId, gate, origin, () =>
-                      execute(session, target)
-                    )
-                  : execute(session, target)
+                  ? this.runHostCommand(session, target.webContentsId, gate, origin, act)
+                  : act()
               },
               options
             )
@@ -128,6 +154,72 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       return await execute(sessionName, target)
     } finally {
       releaseGuest()
+    }
+  }
+
+  private actionEffectsHost(
+    worktreeId: string | undefined,
+    browserPageId: string,
+    sessionName: string
+  ): ActionEffectsHost {
+    const currentTarget = (): ResolvedBrowserCommandTarget =>
+      this.resolveCommandTarget(worktreeId, browserPageId)
+    const workspaceTabs = (): Map<string, number> =>
+      this.getRegisteredTabs(this.browserManager.getWorktreeIdForTab(browserPageId))
+    return {
+      guest: () => {
+        try {
+          return this.getWebContents(currentTarget().webContentsId)
+        } catch {
+          return null
+        }
+      },
+      tabUrls: () =>
+        new Map(
+          [...workspaceTabs()].map(([tabId, webContentsId]) => {
+            const wc = this.getWebContents(webContentsId)
+            try {
+              assertRemoteCliPageAccess(webContentsId)
+            } catch {
+              return [tabId, null]
+            }
+            return [tabId, wc?.getURL() ?? null]
+          })
+        ),
+      loadError: () => {
+        const error = this.browserManager.getBrowserPageLoadError(browserPageId)
+        return error ? `${error.description} (${error.code})` : null
+      },
+      hasDeltaBaseline: () => {
+        const session = this.sessions.get(sessionName)
+        return session?.hasDeltaBaseline === true && !this.isDaemonIdledOut(session)
+      },
+      forgetDeltaBaseline: () => this.forgetDeltaBaseline(sessionName),
+      snapshotDelta: async () => {
+        // Helper-free fast paths start the session here; a process swap reattaches it.
+        await this.ensureSession(sessionName, browserPageId, currentTarget().webContentsId)
+        const reply = await this.execAgentBrowser(sessionName, ['snapshot', '--delta'], {
+          // A wedged page must not hold a finished action for agent-browser's 30 s.
+          timeoutMs: EFFECTS_SNAPSHOT_TIMEOUT_MS,
+          timeoutError: new BrowserError('browser_timeout', 'Timed out reading the page')
+        })
+        const session = this.sessions.get(sessionName)
+        if (session) {
+          session.hasDeltaBaseline = true
+        }
+        return reply
+      },
+      observePageEvents: (listener) =>
+        this.browserManager.observePageEvents(browserPageId, listener),
+      admit: (webContentsId) => assertRemoteCliPageAccess(webContentsId)
+    }
+  }
+
+  /** The daemon's delta baseline is no longer the page the agent last saw. */
+  protected forgetDeltaBaseline(sessionName: string): void {
+    const session = this.sessions.get(sessionName)
+    if (session) {
+      session.hasDeltaBaseline = false
     }
   }
 

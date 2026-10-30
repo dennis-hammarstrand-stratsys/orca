@@ -22,6 +22,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       const result = (await this.execAgentBrowser(sessionName, [
         'snapshot'
       ])) as BrowserSnapshotResult
+      // The agent now holds this tree, so its next action diffs against a fresh baseline.
+      this.forgetDeltaBaseline(sessionName)
       return {
         ...result,
         browserPageId: target.browserPageId
@@ -34,7 +36,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClickResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -49,7 +51,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClickResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -63,8 +65,13 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     )
   }
 
-  async goto(url: string, worktreeId?: string, browserPageId?: string): Promise<BrowserGotoResult> {
-    return this.enqueueTargetedCommand(
+  async goto(
+    url: string,
+    worktreeId?: string,
+    browserPageId?: string,
+    options: { reportEffects?: boolean } = {}
+  ): Promise<BrowserGotoResult> {
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {
@@ -148,7 +155,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         }
         return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
       },
-      { ensureSession: false }
+      { ensureSession: false, ...options }
     )
   }
 
@@ -161,7 +168,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     await assertClipboardTextWriteWithinLimitWithYield(value)
     // agent-browser's fill types into whatever holds focus and sends text per character; set the
     // resolved element's value in one call instead.
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {

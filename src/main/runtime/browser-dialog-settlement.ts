@@ -1,10 +1,17 @@
+import { readBrowserActionEffects } from '../../shared/browser-action-effects'
+import type { BrowserActionEffects } from '../../shared/runtime-browser-contracts'
 import type { ActiveBrowserScreencastPage } from './browser/browser-screencast-contracts'
 
 /** Keep JSON results stable across streaming and agent-browser paths, independent of CLI payload versions. */
-export type BrowserDialogResult = { accepted: boolean }
+export type BrowserDialogResult = { accepted: boolean; effects?: BrowserActionEffects }
 
-export function browserDialogSettledResult(accepted: boolean): BrowserDialogResult {
-  return { accepted }
+/** Only the agent-browser path reports what answering the dialog caused. */
+export function browserDialogSettledResult(
+  accepted: boolean,
+  bridgeResult?: unknown
+): BrowserDialogResult {
+  const effects = readBrowserActionEffects(bridgeResult)
+  return effects ? { accepted, effects } : { accepted }
 }
 
 /** Chromium accepts modal replies only from the reporting CDP session.

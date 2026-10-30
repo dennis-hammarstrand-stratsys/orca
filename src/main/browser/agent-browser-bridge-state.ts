@@ -53,6 +53,14 @@ export abstract class AgentBrowserBridgeState {
     return this.browserManager.getTabIdForWebContentsId(webContentsId)
   }
 
+  // The daemon exits after this much idle time, taking its routes and delta baseline.
+  protected isDaemonIdledOut(session: SessionState): boolean {
+    return (
+      this.agentBrowserIdleTimeoutMs !== null &&
+      Date.now() - session.lastCommandAt >= this.agentBrowserIdleTimeoutMs
+    )
+  }
+
   protected getWebContents(webContentsId: number): Electron.WebContents | null {
     try {
       const { webContents } = require('electron')
