@@ -223,7 +223,7 @@ afterEach(async () => {
   await socket?.stop()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
-  process.exitCode = undefined
+  process.exitCode = 0
   await removeTree(directory)
 })
 
