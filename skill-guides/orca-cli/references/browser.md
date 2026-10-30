@@ -60,12 +60,14 @@ Browser rules:
 - Use `ORCA set device` or `ORCA viewport --mobile`, not `ORCA exec --command "set device ..."`, so the page also gets touch input and `pointer: coarse`. Each page load (reload, `goto`, link click) resets it, so run it again after navigating.
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
 - Anything not listed above goes through `ORCA exec --page <browserPageId> --command "<agent-browser command>"`.
-- If `fill` or `type` fails on a custom input, try `ORCA focus --page <browserPageId> --element @e1 --json` then `ORCA inserttext --page <browserPageId> --text "text" --json`.
+- `fill` sets a field's whole value in one step, at any size. `type` presses real keys into the focused element, so `minlength`/`maxlength`, key handlers, Enter and Tab act as they would for a person; `ORCA focus` the element first. Use `type` when the page reacts to keystrokes.
+- On server-hosted pages `fill` and `type` still insert text the engine's own way. If either does nothing on a custom input there, try `ORCA focus --page <browserPageId> --element @e1 --json` then `ORCA inserttext --page <browserPageId> --text "text" --json`.
 - A client-hosted page renders in the paired desktop's browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` while it is closed, asleep, or disconnected. Server-hosted pages run with no desktop attached; prefer them for long or unattended automation.
 
 Common recoveries:
 
 - `browser_no_tab`: open a tab with `ORCA tab create --url <url> --json`.
 - `browser_stale_ref`: run `ORCA snapshot --page <browserPageId> --json` and retry on the same page with fresh refs.
+- `browser_element_not_interactable`: the element can't take that command, and the message says why (not a text field, disabled, read-only, not a `<select>`, not a file input). Re-snapshot and pick the right ref; for a custom dropdown, click it and then click the option.
 - `browser_tab_not_found`: run `ORCA tab list --json` before switching or closing.
 - `browser_host_unavailable`: the desktop hosting the page is offline. Bring it back, or recreate the page with server placement if the work must outlive the desktop session.

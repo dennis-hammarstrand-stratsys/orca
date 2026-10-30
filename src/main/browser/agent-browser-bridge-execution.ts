@@ -1,10 +1,9 @@
 import { execFile } from 'node:child_process'
 import type { WebContents } from 'electron'
 import { BrowserError } from './cdp-bridge'
-import {
-  focusedRichTextEditExpression,
-  isExplicitContentEditableResult
-} from './agent-browser-bridge-input'
+import type { CapturedElement } from './cdp-element-capture'
+import { sendGuestCdpCommand } from './guest-cdp-command'
+import { readRecord, readString } from './guest-frame-input-sessions'
 import {
   isTabClosedTransportError,
   pageUnavailableMessageForSession
@@ -170,29 +169,73 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return this.runAgentBrowserRaw(sessionName, args, execOptions)
   }
 
-  protected async isExplicitContentEditableTarget(
-    sessionName: string,
-    element: string
-  ): Promise<boolean> {
-    const result = await this.execAgentBrowser(sessionName, [
-      'get',
-      'attr',
-      element,
-      'contenteditable'
-    ])
-    return isExplicitContentEditableResult(result)
-  }
-
-  protected async fillExplicitContentEditable(
+  /** Runs a browser-element-functions action on the element the helper resolves, in its own frame. */
+  protected async actOnElement(
     sessionName: string,
     element: string,
-    value: string
-  ): Promise<void> {
-    await this.execAgentBrowser(sessionName, ['focus', element])
-    // Send one stdin edit to avoid argv limits and focus changes between chunks.
-    await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
-      stdinText: focusedRichTextEditExpression(JSON.stringify(value), { selectAll: true })
+    action: string,
+    functionDeclaration: string,
+    args: unknown[] = []
+  ): Promise<unknown> {
+    const session = this.sessions.get(sessionName)
+    if (!session) {
+      throw this.createPageUnavailableError(sessionName)
+    }
+    session.proxy.elementCapture.start()
+    session.proxy.pointAtNextNode(true)
+    let captured: CapturedElement | null
+    try {
+      // Any element read makes the helper resolve the ref or selector, in whichever frame owns it.
+      await this.execAgentBrowser(sessionName, ['get', 'attr', element, 'id'])
+    } finally {
+      session.proxy.pointAtNextNode(false)
+      captured = session.proxy.elementCapture.stop()
+    }
+    const wc = this.getWebContents(session.webContentsId)
+    if (!wc) {
+      throw this.createPageUnavailableError(sessionName)
+    }
+    if (!captured) {
+      throw new BrowserError('browser_error', `Could not resolve ${element} in the page`)
+    }
+    const response = await sendGuestCdpCommand(
+      wc,
+      'Runtime.callFunctionOn',
+      {
+        objectId: captured.objectId,
+        functionDeclaration,
+        arguments: args.map((value) => ({ value })),
+        returnByValue: true
+      },
+      captured.sessionId
+    ).catch((error: unknown) => {
+      if (error instanceof BrowserError) {
+        throw error
+      }
+      if (!this.getWebContents(session.webContentsId)) {
+        throw this.createPageUnavailableError(sessionName)
+      }
+      throw new BrowserError(
+        'browser_cdp_error',
+        error instanceof Error ? error.message : String(error)
+      )
     })
+    const exception = readRecord(response, 'exceptionDetails')
+    if (exception) {
+      const description = readString(readRecord(exception, 'exception'), 'description')
+      throw new BrowserError(
+        'browser_eval_error',
+        description ?? readString(exception, 'text') ?? 'Page function failed'
+      )
+    }
+    const outcome = readRecord(response, 'result')?.value
+    if (typeof outcome === 'string') {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Cannot ${action} ${element}: ${outcome}`
+      )
+    }
+    return outcome
   }
 
   protected createPageUnavailableError(sessionName: string): BrowserError {
