@@ -1,3 +1,4 @@
+import type { BrowserSnapshotOptions } from '../../../shared/rpc-contract/browser-params'
 import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
 import { BrowserError } from '../../browser/browser-error'
 import { webContents } from 'electron'
@@ -5,7 +6,7 @@ import {
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from '../../ipc/browser-tab-registration-wait'
-import type { BrowserSnapshotOptions, BrowserSnapshotResult } from '../../../shared/runtime-types'
+import type { BrowserSnapshotResult } from '../../../shared/runtime-types'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost,
