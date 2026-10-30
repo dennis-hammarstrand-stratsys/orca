@@ -369,8 +369,8 @@ describe('CLI remote WebSocket transport', () => {
   ] as const)(
     'preflights branch intent on the mutation socket after cached compatibility: %s',
     async (mode) => {
-      const status = {
-        capabilities: ['worktree.remove-branch-policy.v1'] as string[] | undefined,
+      const status: NonNullable<Parameters<typeof startTestRuntime>[1]> = {
+        capabilities: ['worktree.remove-branch-policy.v1'],
         malformed: false,
         failure: false,
         disconnect: false,
@@ -524,7 +524,7 @@ async function startTestRuntime(
         return
       }
 
-      const request = JSON.parse(plaintext) as { id: string; method: string; params?: unknown }
+      const request: { id: string; method: string; params?: unknown } = JSON.parse(plaintext)
       requestMethods.push(request.method)
       requestParams.push(request.params)
       statusOverrides.onRequest?.(request.method)
