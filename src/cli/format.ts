@@ -13,7 +13,8 @@ export {
   formatTabListWithProfiles,
   formatTabProfileClone,
   formatTabProfileShow,
-  formatTabShow
+  formatTabShow,
+  saveBrowserScreenshot
 } from './browser-format'
 
 export {

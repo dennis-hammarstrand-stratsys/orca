@@ -5,7 +5,7 @@ import {
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from '../../ipc/browser-tab-registration-wait'
-import type { BrowserSnapshotResult } from '../../../shared/runtime-types'
+import type { BrowserSnapshotOptions, BrowserSnapshotResult } from '../../../shared/runtime-types'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost,
@@ -195,8 +195,14 @@ export class RuntimeBrowserCommandTargets {
     } catch {}
   }
 
-  async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
+  async browserSnapshot(
+    params: BrowserSnapshotOptions & BrowserCommandTargetParams
+  ): Promise<BrowserSnapshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().snapshot(target.worktreeId, target.browserPageId)
+    return this.requireAgentBrowserBridge().snapshot(
+      target.worktreeId,
+      target.browserPageId,
+      params
+    )
   }
 }
