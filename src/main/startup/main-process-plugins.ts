@@ -65,6 +65,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       .catch((error) =>
         console.warn('[plugins] failed to configure the official marketplace:', error)
       )
+    void state.pluginMarketplaceService
+      ?.seedCommunitySource()
+      .catch((error) => console.warn('[plugins] failed to add the community marketplace:', error))
   }
   state.pluginMarketplaceInstaller = new PluginMarketplaceInstaller({
     marketplace: state.pluginMarketplaceService,
