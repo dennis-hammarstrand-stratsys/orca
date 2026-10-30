@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import type { BrowserManager } from './browser-manager'
+import type { BrowserPopupPage } from './browser-manager-types'
 import { createAgentBrowserProcessEnvironment } from './agent-browser-process-environment'
 import { resolveAgentBrowserBinary } from './agent-browser-bridge-process'
 import type {
@@ -15,6 +16,7 @@ export abstract class AgentBrowserBridgeState {
   protected activeWebContentsId: number | null = null
   // A person's tab pick waiting for the agent's tab to go idle; the undefined key is the global target.
   protected readonly heldPersonSelections = new Map<string | undefined, number>()
+  protected readonly watchedPopupWebContentsIds = new Set<number>()
   protected readonly sessions = new Map<string, SessionState>()
   protected readonly commandQueues = new Map<string, QueuedCommand[]>()
   protected readonly processingQueues = new Set<string>()
@@ -48,7 +50,17 @@ export abstract class AgentBrowserBridgeState {
   }
 
   protected resolveTabIdSafe(webContentsId: number): string | null {
-    return this.browserManager.getTabIdForWebContentsId(webContentsId)
+    return (
+      this.browserManager.getTabIdForWebContentsId(webContentsId) ??
+      this.findPopupPage(webContentsId)?.browserPageId ??
+      null
+    )
+  }
+
+  protected findPopupPage(webContentsId: number): BrowserPopupPage | undefined {
+    return this.browserManager
+      .getPopupPages()
+      .find((popup) => popup.webContentsId === webContentsId)
   }
 
   protected getWebContents(webContentsId: number): Electron.WebContents | null {

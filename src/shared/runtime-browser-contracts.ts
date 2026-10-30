@@ -60,6 +60,8 @@ export type BrowserTabInfo = {
   worktreeId?: string | null
   profileId?: string | null
   profileLabel?: string | null
+  /** Set on a popup window (OAuth, payment): the tab whose page opened it. */
+  openerBrowserPageId?: string
 }
 
 export type BrowserTabListResult = { tabs: BrowserTabInfo[] }
