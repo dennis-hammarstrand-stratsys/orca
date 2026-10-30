@@ -163,6 +163,13 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
     expect(target.agentHostPlatform).toBeNull()
   })
 
+  // Why: an older server omits its OS, but its drive-letter workspace path still proves Windows.
+  it('keeps Windows quoting for an older Windows server that does not report its OS', async () => {
+    await expect(
+      resolveWith({ executionHostId: 'runtime:prod-box', worktreePath: 'C:\\srv\\repo' })
+    ).resolves.toEqual({ platform: 'win32', shell: undefined })
+  })
+
   it('does not describe a remote runtime host with the local Windows shell setting', async () => {
     await expect(
       resolveWith({
@@ -170,6 +177,13 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
         terminalWindowsShell: 'cmd.exe'
       })
     ).resolves.toEqual({ platform: 'win32', shell: undefined })
+  })
+
+  // Why POSIX: a server that reports no OS and no Windows path gets the quoting a fresh launch would use.
+  it('quotes POSIX for a server that reports no OS for a POSIX path', async () => {
+    await expect(
+      resolveWith({ executionHostId: 'runtime:prod-box', worktreePath: '/srv/repo' })
+    ).resolves.toEqual({ platform: 'linux', shell: undefined })
   })
 
   it('keeps POSIX quoting for a WSL UNC worktree', async () => {
@@ -224,6 +238,42 @@ describe('resolveAgentResumeLaunchTarget off Windows', () => {
     ).resolves.toEqual({ platform: 'win32', shell: 'cmd' })
   })
 
+  // Why: a paired server's resume quotes for the OS it reported, as its fresh launches do.
+  it.each([
+    [{}, { platform: 'win32', shell: undefined }],
+    // The server's own terminal shell decides quoting; its panes never receive a tab's override.
+    [{ runtimeHostTerminalWindowsShell: 'cmd.exe' }, { platform: 'win32', shell: 'cmd' }],
+    [{ runtimeHostTerminalWindowsShell: 'git-bash' }, { platform: 'win32', shell: 'posix' }],
+    [{ tabShellOverride: 'cmd.exe' }, { platform: 'win32', shell: undefined }],
+    [
+      { runtimeHostTerminalWindowsShell: 'cmd.exe', tabShellOverride: 'powershell.exe' },
+      { platform: 'win32', shell: 'cmd' }
+    ]
+  ] as const)(
+    'quotes for a Windows paired server from a mac client (%o)',
+    async (tab, expected) => {
+      await expect(
+        resolveWith({
+          executionHostId: 'runtime:prod-box',
+          worktreePath: 'C:\\srv\\repo',
+          runtimeHostPlatform: 'win32',
+          ...tab
+        })
+      ).resolves.toEqual(expected)
+    }
+  )
+
+  it('quotes a nested SSH target on a Windows paired server for that target, not the server', async () => {
+    await expect(
+      resolveWith({
+        connectionId: 'ssh-nested',
+        executionHostId: 'runtime:prod-box',
+        worktreePath: '/home/neil/repo',
+        runtimeHostPlatform: 'win32'
+      })
+    ).resolves.toEqual({ platform: 'linux', shell: undefined })
+  })
+
   it('ignores a stale Windows shell setting on a mac client', async () => {
     await expect(
       resolveWith({
@@ -231,5 +281,42 @@ describe('resolveAgentResumeLaunchTarget off Windows', () => {
         terminalWindowsShell: 'cmd.exe'
       })
     ).resolves.toEqual({ platform: 'darwin', shell: undefined })
+  })
+})
+
+// Why: a paired server's nested SSH target runs the command, so its own reported OS decides quoting.
+describe('resolveSshHostReportedPlatform for a nested SSH target', () => {
+  it('reads the target the server reaches, not the server', async () => {
+    const { resolveSshHostReportedPlatform } = await import('./agent-resume-launch-target')
+    const state = {
+      sshConnectionStates: new Map(),
+      sshStateByEnvironment: new Map([
+        [
+          'prod-box',
+          {
+            connectionStates: new Map([
+              [
+                'ssh-nested',
+                {
+                  targetId: 'ssh-nested',
+                  status: 'connected' as const,
+                  error: null,
+                  reconnectAttempt: 0,
+                  remotePlatform: 'win32' as const
+                }
+              ]
+            ]),
+            targetLabels: new Map(),
+            targetGenerations: new Map(),
+            removedTargetLabels: new Map(),
+            targetsHydrated: true
+          }
+        ]
+      ])
+    }
+    expect(resolveSshHostReportedPlatform(state, 'runtime:prod-box', null, 'ssh-nested')).toBe(
+      'win32'
+    )
+    expect(resolveSshHostReportedPlatform(state, 'runtime:prod-box', null, null)).toBeNull()
   })
 })

@@ -22,6 +22,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'force',
   'fresh',
   'full',
+  'full-tree',
   'help',
   'inject',
   'include-archived',
