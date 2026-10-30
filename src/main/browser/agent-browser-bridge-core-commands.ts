@@ -16,6 +16,7 @@ import {
   waitForAbortedNavigationReplacement
 } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
+import { assertRemoteCliPageAccess } from './remote-cli-page-admission'
 import { agentBrowserSnapshotArgs } from './agent-browser-snapshot-arguments'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
@@ -32,6 +33,8 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       )) as BrowserSnapshotResult
       // agent-browser's snapshot carries neither, so read them off the page it captured.
       const wc = this.requireTargetWebContents(target)
+      // The page may have navigated somewhere an SSH host must not see while the snapshot ran.
+      assertRemoteCliPageAccess(wc.id)
       return {
         ...result,
         browserPageId: target.browserPageId,
