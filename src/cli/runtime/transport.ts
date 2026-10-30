@@ -3,11 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import type {
   ExpectedRuntimeSource,
-  RuntimeOrchestrationEnvelope
+  RuntimeOrchestrationEnvelope,
+  RuntimeRequestSelection
 } from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
-import type { RuntimeRequestSelection } from '../../shared/runtime-rpc-envelope'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 

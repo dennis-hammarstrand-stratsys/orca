@@ -1,8 +1,8 @@
 import type {
   RuntimeOrchestrationEnvelope,
-  RuntimeRequestSelection
+  RuntimeRequestSelection,
+  RuntimeRpcFailure
 } from '../../shared/runtime-rpc-envelope'
-import type { RuntimeRpcFailure } from '../../shared/runtime-rpc-envelope'
 import { redactOrchestrationCompatibilitySecrets } from '../../shared/orchestration-compatibility-evidence'
 
 export type {

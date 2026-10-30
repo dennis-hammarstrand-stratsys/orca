@@ -12,6 +12,8 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
+import type { CliStatusResult, RuntimeWorktreeRemoveResult } from '../../../shared/runtime-types'
+import type { RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import * as appEnvironment from '../../../shared/app-environment'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
@@ -19,8 +21,6 @@ import { writeOrcadMigrationSourceCutover } from '../../ssh/orcad-migration-cuto
 import { removalPtyProvider } from './worktree-rm-pty.test-fixture'
 import { pairedRemovalReceiver } from './worktree-rm-paired.test-fixture'
 import { addManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
-import { requestWorktreeRemoval } from '../../../cli/handlers/worktree-removal-request'
-import { RuntimeClient } from '../../../cli/runtime/client'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import { WorktreeRemove } from '../../../shared/rpc-contract/worktree-params'
 import { UnixSocketTransport } from './unix-socket-transport'
@@ -43,6 +43,37 @@ import { failedWorktreeRemovals, pendingWorktreeRemovals } from '../../worktree-
 installRealWorkerThreadChildProcesses()
 const cliPath = '../../../cli/index'
 const { main }: { main: (argv: string[], cwd: string) => Promise<void> } = await import(cliPath)
+type RemovalClient = {
+  call<TResult>(method: string, params: unknown): Promise<RuntimeRpcSuccess<TResult>>
+  getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>>
+}
+const clientPath = '../../../cli/runtime/client'
+const {
+  RuntimeClient
+}: {
+  RuntimeClient: new (
+    userDataPath: string,
+    requestTimeoutMs: number,
+    remotePairingCode: string | null,
+    environmentSelector: string | null
+  ) => RemovalClient
+} = await import(clientPath)
+const removalRequestPath = '../../../cli/handlers/worktree-removal-request'
+const {
+  requestWorktreeRemoval
+}: {
+  requestWorktreeRemoval: (
+    client: RemovalClient,
+    request: {
+      worktree: string
+      hostId: string
+      force: boolean
+      deleteBranch?: boolean
+      runHooks: boolean
+      allowFailedArchiveHook: boolean
+    }
+  ) => Promise<RuntimeRpcSuccess<RuntimeWorktreeRemoveResult>>
+} = await import(removalRequestPath)
 const exec = promisify(execFile)
 const received = vi.fn<(method: string, params: unknown) => void>()
 let directory = ''
@@ -55,7 +86,7 @@ let repos: Repo[]
 let sshTargets: SshTarget[]
 let meta: Record<string, WorktreeMeta>
 let socket: UnixSocketTransport
-let client: RuntimeClient
+let client: RemovalClient
 let runtime: RemovalRuntime
 let dispatcher: RpcDispatcher
 let supported = true
@@ -159,8 +190,6 @@ beforeEach(async () => {
     getAllWorktreeLineage: () => ({}),
     getAllWorkspaceLineage: () => ({}),
     getProjects: () => [],
-    getProjectRuntimes: () => [],
-    getProjectRuntime: () => undefined,
     getProfileStorageDirectory: () => directory,
     getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
     addRetiredWorktreeName: () => {},
